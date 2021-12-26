@@ -48,6 +48,15 @@ pub fn derive(input: TokenStream) -> TokenStream {
             #name: self.#name.clone().ok_or(concat!(stringify!(#name), " is not set"))?
         }
     });
+
+    let build_empty = fields.iter().map(|f| {
+        let name = &f.ident;
+
+        quote! {
+            #name: None
+        }
+    });
+
     let expanded = quote! {
         struct #bident {
             #(#optionised_fields,)*
@@ -55,7 +64,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
         impl #bident {
             #(#author_methods)*
-            pub fn build(&mut self) -> Result<Command, Box<dyn std::error::Error>> {
+            pub fn build(&self) -> Result<Command, Box<dyn std::error::Error>> {
                 Ok(#name {
                     #(#build_fields,)*
                 })
@@ -65,10 +74,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         impl #name {
             fn builder() ->#bident {
                 #bident {
-                    executable: None,
-                    args: None,
-                    env: None,
-                    current_dir: None,
+                    #(#build_empty,)*
                 }
             }
         }
