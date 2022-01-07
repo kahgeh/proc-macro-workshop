@@ -132,19 +132,26 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 return std::option::Option::None;
             }
 
-            let mut attr_list = match attrs.parse_meta() {
+            let attr_list = match attrs.parse_meta() {
                 Ok(syn::Meta::List(l)) => l,
                 Ok(x) => return mk_err(x),
                 Err(e) => return std::option::Option::Some(e.to_compile_error()),
             };
 
-            let each_lit = match attr_list.nested.pop().unwrap().into_value() {
-                syn::NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
-                    if !nv.path.is_ident("each") {
-                        return mk_err(attr_list);
-                    }
-                    nv.lit
+            let each_nv = attr_list.nested.pairs().find(|p| {
+                if let syn::NestedMeta::Meta(syn::Meta::NameValue(nv)) = p.value() {
+                    return nv.path.is_ident("each");
+                } else {
+                    false
                 }
+            });
+
+            if let std::option::Option::None = each_nv {
+                return mk_err(attr_list);
+            }
+
+            let each_lit = match each_nv.unwrap().value() {
+                syn::NestedMeta::Meta(syn::Meta::NameValue(nv)) => nv.lit.clone(),
                 meta => return mk_err(meta),
             };
 

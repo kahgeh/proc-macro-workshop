@@ -11,7 +11,7 @@ use derive_builder::Builder;
 #[derive(Builder)]
 pub struct Command {
     executable: String,
-    #[builder(each = "arg")]
+    #[builder(each22 = "argx", each = "arg")]
     args: Vec<String>,
     #[builder(eac = "env")]
     env: Vec<String>,
