@@ -120,9 +120,11 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 input.parse::<syn::LitStr>()
             }) {
                 Ok(name_lit) => {
-                    //return Some(quote! { /****/});
                     let name = syn::Ident::new(name_lit.value().as_str(), name_lit.span());
-                    return Some(quote! { pub fn #name(&mut self)->&mut Self {} });
+                    let inner_ty = get_inner_type("Vec", &f.ty);
+                    return Some(
+                        quote! { pub fn #name(&mut self, #name: #inner_ty)->&mut Self {} },
+                    );
                 }
                 Err(err) => panic!("expected each=name, {:?}", err),
             }
