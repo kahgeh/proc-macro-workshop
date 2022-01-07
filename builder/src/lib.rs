@@ -5,9 +5,11 @@ use syn::{
     FieldsNamed, Token,
 };
 
-fn get_option_inner_type(ty: &syn::Type) -> Option<&syn::Type> {
+fn get_inner_type<'a, 'b>(outer_type_name: &'a str, ty: &'b syn::Type) -> Option<&'b syn::Type> {
     if let syn::Type::Path(ref p) = ty {
-        if p.path.segments.len() != 1 || p.path.segments.iter().last().unwrap().ident != "Option" {
+        if p.path.segments.len() != 1
+            || p.path.segments.iter().last().unwrap().ident != outer_type_name
+        {
             return None;
         }
 
@@ -49,7 +51,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let optionised_fields = fields.iter().map(|f| {
         let name = &f.ident;
         let ty = &f.ty;
-        if get_option_inner_type(ty).is_some() {
+        if get_inner_type("Option", ty).is_some() {
             quote! { #name: #ty }
         } else {
             quote! { #name: std::option::Option<#ty> }
@@ -59,7 +61,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let author_methods = fields.iter().map(|f| {
         let name = &f.ident;
         let ty = &f.ty;
-        if let Some(inner_ty) = get_option_inner_type(ty) {
+        if let Some(inner_ty) = get_inner_type("Option", ty) {
             quote! {
                 pub fn #name(&mut self, #name: #inner_ty)->&mut Self {
                     self.#name = Some(#name);
@@ -79,7 +81,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let build_fields = fields.iter().map(|f| {
         let name = &f.ident;
         let ty = &f.ty;
-        if get_option_inner_type(ty).is_some() {
+        if get_inner_type("Option", ty).is_some() {
             quote! {
                 #name: self.#name.clone()
             }
