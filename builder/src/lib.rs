@@ -1,6 +1,9 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data::Struct, DataStruct, DeriveInput, Fields, FieldsNamed};
+use syn::{
+    parse::ParseStream, parse_macro_input, Data::Struct, DataStruct, DeriveInput, Fields,
+    FieldsNamed, Token,
+};
 
 fn get_option_inner_type(ty: &syn::Type) -> Option<&syn::Type> {
     if let syn::Type::Path(ref p) = ty {
@@ -22,7 +25,7 @@ fn get_option_inner_type(ty: &syn::Type) -> Option<&syn::Type> {
     None
 }
 
-#[proc_macro_derive(Builder)]
+#[proc_macro_derive(Builder, attributes(builder))]
 pub fn derive(input: TokenStream) -> TokenStream {
     eprintln!("tokens: {}", input);
     let ast = parse_macro_input!(input as DeriveInput);
@@ -58,14 +61,14 @@ pub fn derive(input: TokenStream) -> TokenStream {
         let ty = &f.ty;
         if let Some(inner_ty) = get_option_inner_type(ty) {
             quote! {
-                fn #name(&mut self, #name: #inner_ty)->&mut Self {
+                pub fn #name(&mut self, #name: #inner_ty)->&mut Self {
                     self.#name = Some(#name);
                     self
                 }
             }
         } else {
             quote! {
-                fn #name(&mut self, #name: #ty)->&mut Self {
+                pub fn #name(&mut self, #name: #ty)->&mut Self {
                     self.#name = Some(#name);
                     self
                 }
@@ -94,13 +97,43 @@ pub fn derive(input: TokenStream) -> TokenStream {
             #name: None
         }
     });
+    let each_author_methods = fields.iter().map(|f| {
+        for attrs in &f.attrs {
+            if attrs.path.segments.len() != 1 {
+                return None;
+            }
 
+            if !attrs.path.is_ident("builder") {
+                return None;
+            }
+            match attrs.parse_args_with(|input: ParseStream| {
+                match input.parse::<syn::Ident>() {
+                    Ok(ident) => {
+                        assert_eq!(ident, "each");
+                        Ok(ident)
+                    }
+                    Err(e) => Err(e),
+                }?;
+                input.parse::<Token![=]>()?;
+                input.parse::<syn::LitStr>()
+            }) {
+                Ok(name_lit) => {
+                    //return Some(quote! { /****/});
+                    let name = syn::Ident::new(name_lit.value().as_str(), name_lit.span());
+                    return Some(quote! { pub fn #name(&mut self)->&mut Self {} });
+                }
+                Err(err) => panic!("expected each=name, {:?}", err),
+            }
+        }
+        None
+    });
     let expanded = quote! {
         struct #bident {
             #(#optionised_fields,)*
         }
 
         impl #bident {
+            #(#each_author_methods)*
             #(#author_methods)*
             pub fn build(&self) -> Result<Command, Box<dyn std::error::Error>> {
                 Ok(#name {
