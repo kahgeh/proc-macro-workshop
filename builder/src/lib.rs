@@ -5,6 +5,9 @@ use syn::{
     FieldsNamed, Token,
 };
 
+const VEC_TYPE_NAME: &str = "Vec";
+const OPTION_TYPE_NAME: &str = "Option";
+
 fn get_inner_type<'a, 'b>(outer_type_name: &'a str, ty: &'b syn::Type) -> Option<&'b syn::Type> {
     if let syn::Type::Path(ref p) = ty {
         if p.path.segments.len() != 1
@@ -51,20 +54,59 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let optionised_fields = fields.iter().map(|f| {
         let name = &f.ident;
         let ty = &f.ty;
-        if get_inner_type("Option", ty).is_some() {
+        if get_inner_type(OPTION_TYPE_NAME, ty).is_some()
+            || get_inner_type(VEC_TYPE_NAME, ty).is_some()
+        {
             quote! { #name: #ty }
         } else {
             quote! { #name: std::option::Option<#ty> }
         }
     });
 
+    let build_fields = fields.iter().map(|f| {
+        let name = &f.ident;
+        let ty = &f.ty;
+        if get_inner_type(OPTION_TYPE_NAME, ty).is_some()
+            || get_inner_type(VEC_TYPE_NAME, ty).is_some()
+        {
+            quote! {
+                #name: self.#name.clone()
+            }
+        } else {
+            quote! {
+                #name: self.#name.clone().ok_or(concat!(stringify!(#name), " is not set"))?
+            }
+        }
+    });
+
+    let build_empty = fields.iter().map(|f| {
+        let name = &f.ident;
+        let ty = &f.ty;
+        if get_inner_type(VEC_TYPE_NAME, ty).is_some() {
+            quote! {
+                #name: Vec::new()
+            }
+        } else {
+            quote! {
+                #name: None
+            }
+        }
+    });
+
     let author_methods = fields.iter().map(|f| {
         let name = &f.ident;
         let ty = &f.ty;
-        if let Some(inner_ty) = get_inner_type("Option", ty) {
+        if let Some(inner_ty) = get_inner_type(OPTION_TYPE_NAME, ty) {
             quote! {
                 pub fn #name(&mut self, #name: #inner_ty)->&mut Self {
                     self.#name = Some(#name);
+                    self
+                }
+            }
+        } else if let Some(_) = get_inner_type(VEC_TYPE_NAME, ty) {
+            quote! {
+                pub fn #name(&mut self, #name: #ty)->&mut Self {
+                    self.#name = #name;
                     self
                 }
             }
@@ -78,27 +120,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
     });
 
-    let build_fields = fields.iter().map(|f| {
-        let name = &f.ident;
-        let ty = &f.ty;
-        if get_inner_type("Option", ty).is_some() {
-            quote! {
-                #name: self.#name.clone()
-            }
-        } else {
-            quote! {
-                #name: self.#name.clone().ok_or(concat!(stringify!(#name), " is not set"))?
-            }
-        }
-    });
-
-    let build_empty = fields.iter().map(|f| {
-        let name = &f.ident;
-
-        quote! {
-            #name: None
-        }
-    });
     let each_author_methods = fields.iter().map(|f| {
         for attrs in &f.attrs {
             if attrs.path.segments.len() != 1 {
@@ -121,10 +142,17 @@ pub fn derive(input: TokenStream) -> TokenStream {
             }) {
                 Ok(name_lit) => {
                     let name = syn::Ident::new(name_lit.value().as_str(), name_lit.span());
-                    let inner_ty = get_inner_type("Vec", &f.ty);
-                    return Some(
-                        quote! { pub fn #name(&mut self, #name: #inner_ty)->&mut Self {} },
-                    );
+                    let field_name = f.ident.as_ref().unwrap();
+                    if name.to_string() == field_name.to_string() {
+                        return None;
+                    }
+                    let inner_ty = get_inner_type(VEC_TYPE_NAME, &f.ty);
+                    return Some(quote! {
+                        pub fn #name(&mut self, #name: #inner_ty)->&mut Self {
+                            self.#field_name.push(#name);
+                            self
+                        }
+                    });
                 }
                 Err(err) => panic!("expected each=name, {:?}", err),
             }
