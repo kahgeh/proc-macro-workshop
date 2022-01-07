@@ -10,21 +10,21 @@ fn get_inner_type<'a, 'b>(outer_type_name: &'a str, ty: &'b syn::Type) -> Option
         if p.path.segments.len() != 1
             || p.path.segments.iter().last().unwrap().ident != outer_type_name
         {
-            return None;
+            return std::option::Option::None;
         }
 
         if let syn::PathArguments::AngleBracketed(ref inner_type) = p.path.segments[0].arguments {
             if inner_type.args.len() != 1 {
-                return None;
+                return std::option::Option::None;
             }
 
             let inner_type = inner_type.args.first().unwrap();
             if let syn::GenericArgument::Type(ref t) = inner_type {
-                return Some(t);
+                return std::option::Option::Some(t);
             }
         }
     }
-    None
+    std::option::Option::None
 }
 
 #[proc_macro_derive(Builder, attributes(builder))]
@@ -85,7 +85,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
             }
         } else {
             quote! {
-                #name: None
+                #name: std::option::Option::None
             }
         }
     });
@@ -93,14 +93,14 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let author_methods = fields.iter().map(|f| {
         let name = &f.ident;
         let ty = &f.ty;
-        if let Some(inner_ty) = get_inner_type(OPTION_TYPE_NAME, ty) {
+        if let std::option::Option::Some(inner_ty) = get_inner_type(OPTION_TYPE_NAME, ty) {
             quote! {
                 pub fn #name(&mut self, #name: #inner_ty)->&mut Self {
-                    self.#name = Some(#name);
+                    self.#name = std::option::Option::Some(#name);
                     self
                 }
             }
-        } else if let Some(_) = get_inner_type(VEC_TYPE_NAME, ty) {
+        } else if let std::option::Option::Some(_) = get_inner_type(VEC_TYPE_NAME, ty) {
             quote! {
                 pub fn #name(&mut self, #name: #ty)->&mut Self {
                     self.#name = #name;
@@ -110,7 +110,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         } else {
             quote! {
                 pub fn #name(&mut self, #name: #ty)->&mut Self {
-                    self.#name = Some(#name);
+                    self.#name = std::option::Option::Some(#name);
                     self
                 }
             }
@@ -118,22 +118,24 @@ pub fn derive(input: TokenStream) -> TokenStream {
     });
 
     fn mk_err<T: quote::ToTokens>(t: T) -> Option<proc_macro2::TokenStream> {
-        Some(syn::Error::new_spanned(t, "expected `builder(each = \"...\")`").to_compile_error())
+        std::option::Option::Some(
+            syn::Error::new_spanned(t, "expected `builder(each = \"...\")`").to_compile_error(),
+        )
     }
     let each_author_methods = fields.iter().map(|f| {
         for attrs in &f.attrs {
             if attrs.path.segments.len() != 1 {
-                return None;
+                return std::option::Option::None;
             }
 
             if !attrs.path.is_ident("builder") {
-                return None;
+                return std::option::Option::None;
             }
 
             let mut attr_list = match attrs.parse_meta() {
                 Ok(syn::Meta::List(l)) => l,
                 Ok(x) => return mk_err(x),
-                Err(e) => return Some(e.to_compile_error()),
+                Err(e) => return std::option::Option::Some(e.to_compile_error()),
             };
 
             let each_lit = match attr_list.nested.pop().unwrap().into_value() {
@@ -154,18 +156,18 @@ pub fn derive(input: TokenStream) -> TokenStream {
             let name = syn::Ident::new(each_name.as_str(), each_lit.span());
             let field_name = f.ident.as_ref().unwrap();
             if name.to_string() == field_name.to_string() {
-                return None;
+                return std::option::Option::None;
             }
 
             let inner_ty = get_inner_type(VEC_TYPE_NAME, &f.ty);
-            return Some(quote! {
+            return std::option::Option::Some(quote! {
                 pub fn #name(&mut self, #name: #inner_ty)->&mut Self {
                     self.#field_name.push(#name);
                     self
                 }
             });
         }
-        None
+        std::option::Option::None
     });
     let expanded = quote! {
         struct #bident {
@@ -175,7 +177,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         impl #bident {
             #(#each_author_methods)*
             #(#author_methods)*
-            pub fn build(&self) -> Result<Command, Box<dyn std::error::Error>> {
+            pub fn build(&self) -> std::result::Result<Command, std::boxed::Box<dyn std::error::Error>> {
                 Ok(#name {
                     #(#build_fields,)*
                 })
