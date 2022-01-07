@@ -1,3 +1,5 @@
 Cargo.lock
 target
 wip
+
+builder/tests/08-unrecognized-attribute.stderr
