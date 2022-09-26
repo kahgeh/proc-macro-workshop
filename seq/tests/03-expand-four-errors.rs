@@ -8,7 +8,6 @@
 //     compile_error!(concat!("error number ", stringify!(1)));
 //     compile_error!(concat!("error number ", stringify!(2)));
 //     compile_error!(concat!("error number ", stringify!(3)));
-//
 // This test is written as a compile_fail test because our macro isn't yet
 // powerful enough to do anything useful. For example if we made it generate
 // something like a function, every one of those functions would have the same
